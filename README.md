@@ -1,4 +1,10 @@
-# Leopold
+# leopold
+
+```
+ __^___
+[(0¿0)]
+   ~-
+```
 ### Event-source processing
 
 ## Goals
