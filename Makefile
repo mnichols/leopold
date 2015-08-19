@@ -3,7 +3,7 @@ SRC_DIR = src
 
 JS = $(shell find $(SRC_DIR) -name "*.js")
 
-COMPILED_JS = $(BUILD_DIR)/fatos.js
+COMPILED_JS = $(BUILD_DIR)/leopold.js
 
 all: build
 
@@ -32,7 +32,7 @@ clean:
 	mkdir $(BUILD_DIR)
 
 test:
-	./node_modules/.bin/babel-node ./test/*.js #| ./node_modules/.bin/faucet
+	./node_modules/.bin/babel-tape-runner ./test/**/*-spec.js #| ./node_modules/.bin/faucet
 
 browser:
 	./node_modules/.bin/browserify \

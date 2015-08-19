@@ -1,5 +1,5 @@
 {
-  "name": "fatos",
+  "name": "leopold",
   "version": "0.1.0",
   "description": "Event-sourced processing",
   "main": "index.js",
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mnichols/fatos"
+    "url": "https://github.com/mnichols/leopold"
   },
   "keywords": [
     "event-source",
@@ -18,11 +18,12 @@
   "author": "Mike Nichols <nichols.mike.s@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mnichols/fatos/issues"
+    "url": "https://github.com/mnichols/leopold/issues"
   },
-  "homepage": "https://github.com/mnichols/fatos",
+  "homepage": "https://github.com/mnichols/leopold",
   "devDependencies": {
     "babel": "^5.8.21",
+    "babel-tape-runner": "^1.2.0",
     "babelify": "^6.1.3",
     "blue-tape": "^0.1.10",
     "browser-run": "^2.1.2",
