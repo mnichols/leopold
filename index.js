@@ -33,11 +33,7 @@ const unitOfWork = stampit()
         let pending = []
 
         this.append = (e) => {
-            if(Array.isArray(e)) {
-                pending.push.apply(pending,e)
-            } else {
-                pending.push(e)
-            }
+            pending.push.apply(pending,e)
             return e
         }
         this.commit = () => {
@@ -52,34 +48,67 @@ const unitOfWork = stampit()
         }
     })
 
-const evented = stampit()
+function isFunction(obj) {
+    return obj && toString.call(obj === '[object Function]')
+}
+const eventable = stampit()
     .init(function(){
-        let id
+        //accept id initializer value
+        let id = this._id
+        ;(delete this._id)
         let revision
-        //no id function provided
-        if(typeof(this.id) === 'undefined') {
+
+        //decorate event(s) with critical properties
+        let decorate = (arr) => {
+            return arr.map((e) => {
+                e.id = this.id()
+                e.revision = this.revision()
+                return e
+            })
+        }
+
+        let validateEvents = (arr) => {
+            for(let e of arr) {
+                if(!e || !e.event) {
+                    throw new Error('`event` is required')
+                }
+            }
+            return arr
+        }
+        if(!isFunction(this.id)) {
             this.id = () => {
                 return (id || (id = cuid() ))
             }
         }
+        //no id function provided
         if(typeof(this.revision) === 'undefined') {
             this.revision = () => {
                 return (revision || (revision = 1))
             }
         }
         this.raise = (e) => {
-            if(!e.event) {
-                throw new Error('`event` is required')
+            if(!Array.isArray(e)) {
+                e = [e]
             }
-            (revision = this.revision() + 1)
+            validateEvents(e)
+            decorate(e)
 
             return Promise.resolve(e)
             .bind(this.uow)
             .tap(this.uow.append)
             .bind(this)
             .then(this.applyEvent)
+            .tap(() =>{
+                revision = this.revision() + 1
+            })
         }
         this.applyEvent = (e) => {
+            if(Array.isArray(e)) {
+                return Promise.resolve(e)
+                    .bind(this)
+                    .map(this.applyEvent)
+                    .return(this)
+            }
             return Promise.resolve(this)
                 .bind(this)
                 .call('$' + e.event, e)
@@ -88,28 +117,30 @@ const evented = stampit()
         }
     })
 
-const leopold = (opts) => {
-    opts = (opts || {})
-    const storage = (opts.storage || inMemoryStorage())
-    const identityMap = hashIdentityMap()
-    const uow = (opts.unitOfWork || unitOfWork({
-        storage: storage
-        , identityMap: identityMap
-    }))
-    return stampit()
+export default stampit()
     .refs({
-        uow: uow
+        storage: inMemoryStorage()
+        , identityMap: hashIdentityMap()
     })
     .methods({
         commit: function() {
             return this.uow.commit()
         }
-        ,evented: function (it = {}) {
-            let result =  evented.create(it)
-            result.uow = uow
-            return result
+        , evented: function(it) {
+            if(stampit.isStamp(it)) {
+                return it
+                    .compose(stampit().refs({ uow: this.uow}))
+                    .compose(eventable)
+            }
+            let ev = eventable({ uow: this.uow})
+            Object.assign(it, ev)
+            return it
         }
     })
-    .create()
-}
-export default leopold
+    .init(function() {
+        this.uow = unitOfWork({
+            storage: this.storage
+            , identityMap: this.identityMap
+        })
+    })
+
