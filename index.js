@@ -4,7 +4,18 @@ import Promise from 'bluebird'
 import stampit from 'stampit'
 import cuid from 'cuid'
 
-const mixin = (behavior) => target => Object.assign(target, behavior)
+const hashIdentityMap = stampit().init()
+
+const inMemoryStorage = stampit()
+    .methods({
+        append: function(env) {
+            this.envelopes.push(env)
+            return this
+        }
+    })
+    .init(function() {
+        this.envelopes = []
+    })
 
 const unitOfWork = stampit()
     .refs({
@@ -20,29 +31,23 @@ const unitOfWork = stampit()
     })
     .init(function(){
         let pending = []
-        let flushing = false
 
         this.append = (e) => {
-            if(flushing) {
-                //in proc flush so put on next tick
-                return flushing
-                    .bind(this)
-                    .then(function() {
-                        return this.append(e)
-                    })
-            }
             if(Array.isArray(e)) {
-                pending.append.apply(pending,e)
+                pending.push.apply(pending,e)
             } else {
-                pending.append(e)
+                pending.push(e)
             }
+            return e
         }
-        this.flush = () => {
-            return flushing = Promise.resolve(pending.splice(0,pending.length))
+        this.commit = () => {
+            //move reference to array in case event arrives while flushing
+            let commitable = pending.splice(0,pending.length)
+            return Promise.resolve(commitable)
                 .bind(this)
                 .then(this.envelope)
                 .bind(this.storage)
-                .then(this.storage.append)
+                .tap(this.storage.append)
                 .return(this)
         }
     })
@@ -50,18 +55,29 @@ const unitOfWork = stampit()
 const evented = stampit()
     .init(function(){
         let id
+        let revision
         //no id function provided
         if(typeof(this.id) === 'undefined') {
             this.id = () => {
                 return (id || (id = cuid() ))
             }
         }
+        if(typeof(this.revision) === 'undefined') {
+            this.revision = () => {
+                return (revision || (revision = 1))
+            }
+        }
         this.raise = (e) => {
             if(!e.event) {
                 throw new Error('`event` is required')
             }
-            //store...then
-            return this.applyEvent(e)
+            (revision = this.revision() + 1)
+
+            return Promise.resolve(e)
+            .bind(this.uow)
+            .tap(this.uow.append)
+            .bind(this)
+            .then(this.applyEvent)
         }
         this.applyEvent = (e) => {
             return Promise.resolve(this)
@@ -73,13 +89,27 @@ const evented = stampit()
     })
 
 const leopold = (opts) => {
-    const storage = (opts.storage || storage)
-    const identityMap = identityMap()
-    const uow = unitOfWork()
-    return stampit().static({
-        evented(it = {}) {
-            return evented.create(it)
+    opts = (opts || {})
+    const storage = (opts.storage || inMemoryStorage())
+    const identityMap = hashIdentityMap()
+    const uow = (opts.unitOfWork || unitOfWork({
+        storage: storage
+        , identityMap: identityMap
+    }))
+    return stampit()
+    .refs({
+        uow: uow
+    })
+    .methods({
+        commit: function() {
+            return this.uow.commit()
+        }
+        ,evented: function (it = {}) {
+            let result =  evented.create(it)
+            result.uow = uow
+            return result
         }
     })
+    .create()
 }
 export default leopold

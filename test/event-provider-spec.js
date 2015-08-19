@@ -38,3 +38,10 @@ test('raising event mutates provider',  assert => {
             assert.equal(its.name,'bleh')
         })
 })
+test('raising event increments revision',  assert => {
+    const model = createModel()
+    return model.fire({ name: 'bleh'})
+        .tap( its => {
+            assert.equal(its.revision(),2)
+        })
+})
