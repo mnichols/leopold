@@ -4,26 +4,47 @@ import Promise from 'bluebird'
 import stampit from 'stampit'
 import cuid from 'cuid'
 
-const hashIdentityMap = stampit().init()
+const hashIdentityMap = stampit().init(function(){
+    let providers = {}
+    this.register = (id, provider) => {
+        if(!id) {
+            throw new Error('`id` is required')
+        }
+        if(!provider) {
+            throw new Error('`provider` is required')
+        }
+        providers[id] = provider
+        return provider
+    }
+    this.release = () => {
+        providers = {}
+    }
+
+})
 
 const inMemoryStorage = stampit()
     .methods({
         append: function(env) {
+            env.revision = this.revision()
             this.envelopes.push(env)
             return this
         }
     })
     .init(function() {
+        let revision = 0
         this.envelopes = []
+        this.revision = () => {
+            return (revision++)
+        }
     })
 
-const unitOfWork = stampit()
+const writeableUnitOfWork = stampit()
     .refs({
         storage: undefined
         , identityMap: undefined
     })
     .methods({
-        envelope: function( events) {
+        envelope: function enveloper( events) {
             return {
                 events: events
             }
@@ -44,8 +65,44 @@ const unitOfWork = stampit()
                 .then(this.envelope)
                 .bind(this.storage)
                 .tap(this.storage.append)
+                .bind(this.identityMap)
+                .tap(this.identityMap.release)
                 .return(this)
         }
+        this.register = this.identityMap.register
+    })
+
+const unitOfWork = stampit()
+    .refs({
+        storage: undefined
+        , identityMap: undefined
+    })
+    .methods({
+        envelope: function enveloper( events) {
+            return {
+                events: events
+            }
+        }
+    })
+    .init(function(){
+        let current
+        let writeable = writeableUnitOfWork({
+            envelope      : this.envelope
+            , identityMap : this.identityMap
+            , storage     : this.storage
+        })
+
+        this.append = (e) => {
+            return current.append(e)
+        }
+        this.commit = () => {
+            return current.commit()
+        }
+        this.register = (id, provider) => {
+            return current.register(id, provider)
+        }
+        //by default we are in writeable state
+        current = writeable
     })
 
 function isFunction(obj) {
@@ -115,6 +172,8 @@ const eventable = stampit()
                 .return(this)
 
         }
+        //register this instance on the unit of work
+        this.uow.register(this.id(), this)
     })
 
 export default stampit()
