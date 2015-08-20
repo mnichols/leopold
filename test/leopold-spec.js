@@ -16,10 +16,13 @@ test('event provider events are stored', (assert) => {
     let sut = leo({
         storage: storage
     })
-    let dumb = {
-        $foo: function(){}
-    }
-    let model = sut.evented(dumb)
+    let model = stampit({
+        methods: {
+            $foo(){}
+        }
+    })
+    .compose(sut.eventable())
+    .create()
     return model.raise({event: 'foo'})
         .bind(sut)
         .then(sut.commit)
@@ -41,7 +44,9 @@ test('restoring event providers works', (assert) => {
     let parentModel = stampit()
         .methods({
             $childAdded :function(e) {
-                let child = sut.evented(childModel)({ _id: e.childId})
+                let child = childModel
+                    .compose(this.leo.eventable())
+                    .create({_id: e.childId})
                 this.children[e.childId] = child
             }
             , addChild : function(name) {
@@ -81,7 +86,10 @@ test('restoring event providers works', (assert) => {
         , { id: 3, event: 'named', revision: 1, name: 'chay'}
     ]
 
-    let parent = sut.evented(parentModel)({ _id: 1})
+    let parent = parentModel
+        .compose(sut.eventable())
+        .create({ _id: 1})
+
     return parent.addChild('joshua')
         .then(parent.addChild.bind(parent,'chay'))
         .bind(sut)

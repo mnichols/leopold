@@ -108,13 +108,36 @@ const unitOfWork = stampit()
 function isFunction(obj) {
     return obj && toString.call(obj === '[object Function]')
 }
-const eventable = stampit()
+/**
+ * accepts `_id` as an initial id value. if an `id` function
+ * exists (further up the composition chain) it does not override it;
+ * otherwise, it provides its own method for `id()`
+ * */
+const identifiable = stampit()
     .init(function(){
         //accept id initializer value
         let id = this._id
         ;(delete this._id)
-        let revision
+        if(!isFunction(this.id)) {
+            this.id = function() {
+                return (id || (id = cuid() ))
+            }
+        }
+    })
 
+const revisable = stampit()
+    .init(function() {
+        let revision = 1
+        this.revision = function (val) {
+            if(typeof(val) !== 'undefined') {
+                return (revision = val)
+            }
+            return revision
+        }
+    })
+const eventable = stampit()
+    .init(function(){
+        let uow = this.leo.unitOfWork()
         //decorate event(s) with critical properties
         let decorate = (arr) => {
             return arr.map((e) => {
@@ -132,17 +155,6 @@ const eventable = stampit()
             }
             return arr
         }
-        if(!isFunction(this.id)) {
-            this.id = function() {
-                return (id || (id = cuid() ))
-            }
-        }
-        //no id function provided
-        if(typeof(this.revision) === 'undefined') {
-            this.revision = function () {
-                return (revision || (revision = 1))
-            }
-        }
         this.raise = function (e) {
             if(!Array.isArray(e)) {
                 e = [e]
@@ -151,12 +163,12 @@ const eventable = stampit()
             decorate(e)
 
             return Promise.resolve(e)
-            .bind(this.uow)
-            .tap(this.uow.append)
+            .bind(uow)
+            .tap(uow.append)
             .bind(this)
             .then(this.applyEvent)
             .tap(() =>{
-                revision = this.revision() + 1
+                this.revision(this.revision() + 1)
             })
         }
         this.applyEvent = function(e) {
@@ -173,7 +185,7 @@ const eventable = stampit()
 
         }
         //register this instance on the unit of work
-        this.uow.register(this.id(), this)
+        uow.register(this.id(), this)
     })
 
 export default stampit()
@@ -181,37 +193,30 @@ export default stampit()
         storage: inMemoryStorage()
         , identityMap: hashIdentityMap()
     })
-    .methods({
-        commit: function() {
-            return this.uow.commit()
-        }
-        , composable: function() {
-            return stampit()
-                .refs({ uow: this.uow})
-                .compose(eventable)
-        }
-        /**
-         * Expose an `stamp` that may be use for composition
-         * with another stamp
-         * @method evented
-         * */
-        , evented: function(it) {
-            if(stampit.isStamp(it)) {
-                return it
-                    .compose(stampit().refs({ uow: this.uow}))
-                    .compose(eventable)
-            }
-            let stamp = stampit()
-                .refs({ uow: this.uow})
-                .compose(eventable)
-            Object.assign(it, stamp())
-            return it
-        }
-    })
+    .compose(identifiable)
     .init(function() {
-        this.uow = unitOfWork({
+        //default uow impl
+        let uow = unitOfWork({
             storage: this.storage
             , identityMap: this.identityMap
         })
+        /**
+         * Expose an `stamp` that may be use for composition
+         * with another stamp
+         * @method eventable
+         * */
+        this.eventable = () => {
+            return stampit()
+                .props({leo: this})
+                .compose(identifiable)
+                .compose(revisable)
+                .compose(eventable)
+        }
+        this.commit = () => {
+            return uow.commit()
+        }
+        this.unitOfWork = () => {
+            return uow
+        }
     })
 
