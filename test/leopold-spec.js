@@ -16,8 +16,10 @@ test('event provider events are stored', (assert) => {
     let sut = leo({
         storage: storage
     })
-
-    let model = sut.evented({$foo: ()=>{}})
+    let dumb = {
+        $foo: function(){}
+    }
+    let model = sut.evented(dumb)
     return model.raise({event: 'foo'})
         .bind(sut)
         .then(sut.commit)
@@ -26,7 +28,7 @@ test('event provider events are stored', (assert) => {
 
         })
 })
-test.only('restoring event providers works', (assert) => {
+test('restoring event providers works', (assert) => {
     let envelopes = []
     let storage = {
         append: function(env) {

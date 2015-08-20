@@ -21,9 +21,14 @@ test('extending id-less object', assert => {
     let model = leo().evented({})
     assert.ok(model.id())
 })
-test('extending id`d object', assert => {
+test.only('extending function id`d object', assert => {
     assert.plan(1)
     let model = leo().evented({id: ()=>{ return "foo"}})
+    assert.equal(model.id(),"foo")
+})
+test('extending parameter id`d object', assert => {
+    assert.plan(1)
+    let model = leo().evented({_id : 'foo'})
     assert.equal(model.id(),"foo")
 })
 test('raising event without `event` throws',  assert => {

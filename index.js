@@ -124,7 +124,7 @@ const eventable = stampit()
             })
         }
 
-        let validateEvents = (arr) => {
+        let validateEvents = function (arr) {
             for(let e of arr) {
                 if(!e || !e.event) {
                     throw new Error('`event` is required')
@@ -133,17 +133,17 @@ const eventable = stampit()
             return arr
         }
         if(!isFunction(this.id)) {
-            this.id = () => {
+            this.id = function() {
                 return (id || (id = cuid() ))
             }
         }
         //no id function provided
         if(typeof(this.revision) === 'undefined') {
-            this.revision = () => {
+            this.revision = function () {
                 return (revision || (revision = 1))
             }
         }
-        this.raise = (e) => {
+        this.raise = function (e) {
             if(!Array.isArray(e)) {
                 e = [e]
             }
@@ -159,7 +159,7 @@ const eventable = stampit()
                 revision = this.revision() + 1
             })
         }
-        this.applyEvent = (e) => {
+        this.applyEvent = function(e) {
             if(Array.isArray(e)) {
                 return Promise.resolve(e)
                     .bind(this)
@@ -185,14 +185,26 @@ export default stampit()
         commit: function() {
             return this.uow.commit()
         }
+        , composable: function() {
+            return stampit()
+                .refs({ uow: this.uow})
+                .compose(eventable)
+        }
+        /**
+         * Expose an `stamp` that may be use for composition
+         * with another stamp
+         * @method evented
+         * */
         , evented: function(it) {
             if(stampit.isStamp(it)) {
                 return it
                     .compose(stampit().refs({ uow: this.uow}))
                     .compose(eventable)
             }
-            let ev = eventable({ uow: this.uow})
-            Object.assign(it, ev)
+            let stamp = stampit()
+                .refs({ uow: this.uow})
+                .compose(eventable)
+            Object.assign(it, stamp())
             return it
         }
     })
