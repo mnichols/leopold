@@ -47,6 +47,16 @@ test('raising event without `event` throws',  assert => {
 
     assert.throws(model.raise.bind(model,{event: undefined}),/`event` is required/)
 })
+test('raising event without handler is ok',(assert) => {
+    let sut = leo()
+    const model = stampit()
+        .compose(sut.eventable())
+        .create()
+    return model.raise({event: 'foo'})
+        .then(function(){
+            assert.pass('no handler is ok')
+        })
+})
 test('raising event mutates provider',  assert => {
     let sut = leo()
     const model = fireable()

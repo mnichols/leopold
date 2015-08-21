@@ -15,7 +15,7 @@ $(COMPILED_JS): $(JS)
 			--outfile $(COMPILED_JS) \
 			--standalone fatos \
 			--transform babelify \
-			--paths $(SRC_DIR) \
+			--paths ./$(SRC_DIR) \
 			--debug
 
 build: node_modules $(COMPILED_JS)

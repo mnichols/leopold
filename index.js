@@ -273,7 +273,13 @@ const eventable = stampit()
             }
             return Promise.resolve(this)
                 .bind(this)
-                .call('$' + e.event, e)
+                .tap(function(){
+                    let fn = this['$' + e.event]
+                    if(!fn) {
+                        return this
+                    }
+                    return fn.call(this, e)
+                })
                 .return(this)
 
         }
