@@ -64,6 +64,8 @@ test('raising event increments revision',  assert => {
         .compose(sut.eventable())
         .create()
 
+    assert.equal(model.revision(),1)
+
     return model.fire({ name: 'bleh'})
         .tap( its => {
             assert.equal(its.revision(),2)

@@ -4,8 +4,56 @@ import Promise from 'bluebird'
 import stampit from 'stampit'
 import cuid from 'cuid'
 
+//utility
+function isFunction(obj) {
+    return obj && toString.call(obj === '[object Function]')
+}
+/**
+ * accepts `_id` as an initial id value. if an `id` function
+ * exists (further up the composition chain) it does not override it;
+ * otherwise, it provides its own method for `id()`
+ * */
+const identifiable = stampit()
+    .init(function(){
+        //accept id initializer value
+        let id = this._id
+        ;(delete this._id)
+        if(!isFunction(this.id)) {
+            this.id = function() {
+                return (id || (id = cuid() ))
+            }
+        }
+    })
+
+/**
+ * encapsulates behaviors for revisioning of components
+ * */
+const revisable = stampit()
+    .init(function() {
+        let revision = 1
+        /**
+         * either get the current revision or set the revision with `val`
+         * @param {Number} val the revision to set
+         * */
+        this.revision = function (val) {
+            if(val) {
+                return (revision = val)
+            }
+            return revision
+        }
+        /**
+         * gets next revision (doesnt mutate state)
+         * */
+        this.nextRevision = () => {
+            return (this.revision() + 1)
+        }
+    })
+
+/**
+ * simple hashmap storage of event providers
+ * */
 const hashIdentityMap = stampit().init(function(){
-    let providers = {}
+    let providers = new Map()
     this.register = (id, provider) => {
         if(!id) {
             throw new Error('`id` is required')
@@ -13,28 +61,55 @@ const hashIdentityMap = stampit().init(function(){
         if(!provider) {
             throw new Error('`provider` is required')
         }
-        providers[id] = provider
+        providers.set(id, provider)
+        return provider
+    }
+    this.get = (id) => {
+        if(!id) {
+            throw new Error('`id` is required')
+        }
+        let provider = providers.get(id)
+        if(!provider) {
+            throw new Error('could not locate provider with id "' + id + '""')
+        }
         return provider
     }
     this.release = () => {
-        providers = {}
+        providers.clear()
     }
 
 })
 
 const inMemoryStorage = stampit()
-    .methods({
-        append: function(env) {
-            env.revision = this.revision()
-            this.envelopes.push(env)
+    .compose(revisable)
+    .init(function() {
+        var envelopes = []
+        this.store = (env) => {
+            if(!env.revision) {
+                env.revision = this.revision(this.nextRevision())
+            }
+            envelopes.push(env)
             return this
         }
-    })
-    .init(function() {
-        let revision = 0
-        this.envelopes = []
-        this.revision = () => {
-            return (revision++)
+        this.events = function*(from, to) {
+            from = (from || 0)
+            to = (to || Number.MAX_VALUE)
+            if(from > to) {
+                throw new Error('`from` must be less than or equal `to`')
+            }
+            if(!envelopes.length) {
+                return []
+            }
+            for(let env of envelopes) {
+                if(env.revision > to) {
+                    return //we are done streaming
+                }
+                if(env.revision >= from) {
+                    for(let ev of env.events) {
+                        yield ev
+                    }
+                }
+            }
         }
     })
 
@@ -64,12 +139,54 @@ const writeableUnitOfWork = stampit()
                 .bind(this)
                 .then(this.envelope)
                 .bind(this.storage)
-                .tap(this.storage.append)
+                .tap(this.storage.store)
                 .bind(this.identityMap)
                 .tap(this.identityMap.release)
                 .return(this)
         }
+        this.register = function() {
+            //no op
+        }
+    })
+
+const readableUnitOfWork = stampit()
+    .refs({
+        storage: undefined
+        , identityMap: undefined
+    })
+    .init(function(){
+        this.append = (e) => {
+            //no op
+            return e
+        }
+        this.commit = () => {
+            return Promise.resolve(this)
+        }
         this.register = this.identityMap.register
+
+        const iterate = (cur, iterator) => {
+            if(cur.done) {
+                return Promise.resolve(this)
+            }
+            let event = cur.value
+            let target = this.identityMap.get(event.id)
+            return target.applyEvent(event)
+                .bind(this)
+                .then(function(){
+                    return iterate(iterator.next(), iterator)
+                }, function(err) {
+                    iterator.throw(err)
+                    return err
+                })
+        }
+        this.restore = (root, from, to) => {
+            if(!root) {
+                throw new Error('`root` is required')
+            }
+            this.register(root.id(),root)
+            let events = this.storage.events(from, to)
+            return iterate(events.next(),events)
+        }
     })
 
 const unitOfWork = stampit()
@@ -101,40 +218,18 @@ const unitOfWork = stampit()
         this.register = (id, provider) => {
             return current.register(id, provider)
         }
+        this.restore = (root, from, to) => {
+            current = readableUnitOfWork({
+                identityMap : this.identityMap
+                , storage   : this.storage
+            })
+            return current.restore(root, from, to)
+        }
+
         //by default we are in writeable state
         current = writeable
     })
 
-function isFunction(obj) {
-    return obj && toString.call(obj === '[object Function]')
-}
-/**
- * accepts `_id` as an initial id value. if an `id` function
- * exists (further up the composition chain) it does not override it;
- * otherwise, it provides its own method for `id()`
- * */
-const identifiable = stampit()
-    .init(function(){
-        //accept id initializer value
-        let id = this._id
-        ;(delete this._id)
-        if(!isFunction(this.id)) {
-            this.id = function() {
-                return (id || (id = cuid() ))
-            }
-        }
-    })
-
-const revisable = stampit()
-    .init(function() {
-        let revision = 1
-        this.revision = function (val) {
-            if(typeof(val) !== 'undefined') {
-                return (revision = val)
-            }
-            return revision
-        }
-    })
 const eventable = stampit()
     .init(function(){
         let uow = this.leo.unitOfWork()
@@ -142,7 +237,7 @@ const eventable = stampit()
         let decorate = (arr) => {
             return arr.map((e) => {
                 e.id = this.id()
-                e.revision = this.revision()
+                e.revision = this.nextRevision()
                 return e
             })
         }
@@ -167,11 +262,9 @@ const eventable = stampit()
             .tap(uow.append)
             .bind(this)
             .then(this.applyEvent)
-            .tap(() =>{
-                this.revision(this.revision() + 1)
-            })
         }
         this.applyEvent = function(e) {
+            this.revision(e.revision)
             if(Array.isArray(e)) {
                 return Promise.resolve(e)
                     .bind(this)
@@ -189,12 +282,10 @@ const eventable = stampit()
     })
 
 export default stampit()
-    .refs({
-        storage: inMemoryStorage()
-        , identityMap: hashIdentityMap()
-    })
     .compose(identifiable)
     .init(function() {
+        this.storage = (this.storage || inMemoryStorage())
+        this.identityMap = (this.identityMap || hashIdentityMap())
         //default uow impl
         let uow = unitOfWork({
             storage: this.storage
@@ -204,6 +295,8 @@ export default stampit()
          * Expose an `stamp` that may be use for composition
          * with another stamp
          * @method eventable
+         * @return {stamp} factory that may be composed to attach
+         * `eventable` behaviors onto another stamp
          * */
         this.eventable = () => {
             return stampit()
@@ -212,11 +305,40 @@ export default stampit()
                 .compose(revisable)
                 .compose(eventable)
         }
+
+        /**
+         * convenience method to commit pending events to storage
+         * @return {leopold}
+         * */
         this.commit = () => {
-            return uow.commit()
+            return this.unitOfWork().commit()
         }
+        /**
+         * convenience method to unitOfWork inside `eventable` impl
+         * @return {unitOfWork}
+         * */
         this.unitOfWork = () => {
             return uow
+        }
+        /**
+         * mount an envelope having events into storage
+         * useful for testing, or perhaps seeding an app from a backend
+         * */
+        this.mount = (envelope) => {
+            return Promise.resolve(envelope)
+                .bind(this.storage)
+                .then(this.storage.store)
+        }
+        /**
+         * restore to revision `to` from revision `from`
+         * using `root` at the entrypoint. `to` and `from` are inclusive.
+         * @param {eventable} root any `eventable` object
+         * @param {Number} from lower bound revision to include
+         * @param {Number} to upper bound revision to include
+         * @return {Promise} resolving this leo instance
+         */
+        this.restore = (root, from, to) => {
+            return this.unitOfWork().restore(root, from, to)
         }
     })
 

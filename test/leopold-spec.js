@@ -7,7 +7,7 @@ import stampit from 'stampit'
 test('event provider events are stored', (assert) => {
     let envelopes = []
     let storage = {
-        append: function(env) {
+        store: function(env) {
             envelopes.push(env)
 
         }
@@ -28,18 +28,39 @@ test('event provider events are stored', (assert) => {
         .then(sut.commit)
         .then(()=>{
             assert.equal(envelopes.length, 1)
+        })
+})
+test('restoring throwing event handler bubble up error',(assert) => {
+    assert.plan(1)
+    let sut = leo()
+    let throwing = stampit().methods({
+        $foo: function() {
+            throw new Error('i have fooed')
+        }
+    })
+    .compose(sut.eventable())
+    .create({_id:1})
 
+    let env = {
+        revision: 1
+        , events: [ { event: 'foo', id: 1, revision: 1 }]
+    }
+    return sut.mount(env)
+        .then(function(){
+            return sut.restore(throwing,0,1)
+        })
+        ['catch'](function(err) {
+            assert.equal(err.message,'i have fooed')
         })
 })
 test('restoring event providers works', (assert) => {
     let envelopes = []
     let storage = {
         append: function(env) {
-            console.log('appending',env)
             envelopes.push(env)
         }
     }
-    let sut = leo({storage: storage})
+    let sut = leo()
 
     let parentModel = stampit()
         .methods({
@@ -80,20 +101,27 @@ test('restoring event providers works', (assert) => {
         })
 
     let events = [
-        { id: 1, event: 'childAdded', revision: 1, childId: 2}
-        , { id: 2, event: 'named', revision: 1, name: 'joshua'}
-        , { id: 1, event: 'childAdded', revision: 2, childId: 3}
-        , { id: 3, event: 'named', revision: 1, name: 'chay'}
+        { id: 1, event: 'childAdded', revision: 2, childId: 2}
+        , { id: 2, event: 'named', revision: 2, name: 'joshua'}
+        , { id: 1, event: 'childAdded', revision: 3, childId: 3}
+        , { id: 3, event: 'named', revision: 2, name: 'chay'}
     ]
 
     let parent = parentModel
         .compose(sut.eventable())
         .create({ _id: 1})
 
-    return parent.addChild('joshua')
-        .then(parent.addChild.bind(parent,'chay'))
-        .bind(sut)
-        .then(sut.commit)
+    return sut.mount({revision: 1, events: events})
+        .then(function(){
+            return sut.restore(parent, 0, 1)
+            .then(function(){
+                assert.ok(parent.children[2])
+                assert.ok(parent.children[3])
+                assert.equal(parent.revision(),3)
+                assert.equal(parent.children[2]._name,'joshua')
+                assert.equal(parent.children[3]._name,'chay')
+            })
+        })
 })
 
 
