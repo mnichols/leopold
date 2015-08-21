@@ -140,8 +140,6 @@ const writeableUnitOfWork = stampit()
                 .then(this.envelope)
                 .bind(this.storage)
                 .tap(this.storage.store)
-                .bind(this.identityMap)
-                .tap(this.identityMap.release)
                 .return(this)
         }
         this.register = function() {
@@ -208,22 +206,32 @@ const unitOfWork = stampit()
             , identityMap : this.identityMap
             , storage     : this.storage
         })
+        let readable = readableUnitOfWork({
+            identityMap : this.identityMap
+            , storage   : this.storage
+        })
 
         this.append = (e) => {
             return current.append(e)
         }
         this.commit = () => {
             return current.commit()
+                .bind(this.identityMap)
+                .tap(this.identityMap.release)
+                .return(this)
         }
         this.register = (id, provider) => {
             return current.register(id, provider)
         }
         this.restore = (root, from, to) => {
-            current = readableUnitOfWork({
-                identityMap : this.identityMap
-                , storage   : this.storage
-            })
+            current = readable
             return current.restore(root, from, to)
+                .bind(this)
+                .then(function(){
+                    this.identityMap.release()
+                    current = writeable
+                    return this
+                })
         }
 
         //by default we are in writeable state
