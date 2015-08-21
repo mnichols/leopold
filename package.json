@@ -1,6 +1,6 @@
 {
   "name": "leopold",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Event-sourced processing",
   "main": "index.js",
   "scripts": {
@@ -21,6 +21,9 @@
     "url": "https://github.com/mnichols/leopold/issues"
   },
   "homepage": "https://github.com/mnichols/leopold",
+  "browserify": {
+      { "transform": [ "babelify" ]}
+  },
   "devDependencies": {
     "babel": "^5.8.21",
     "babel-tape-runner": "^1.2.0",
