@@ -22,7 +22,9 @@
   },
   "homepage": "https://github.com/mnichols/leopold",
   "browserify": {
-      { "transform": [ "babelify" ]}
+      "transform": [ 
+          ["babelify", { "blacklist": "regenerator" } ]
+      ]
   },
   "devDependencies": {
     "babel": "^5.8.21",
