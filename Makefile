@@ -32,14 +32,13 @@ clean:
 	mkdir $(BUILD_DIR)
 
 test:
-	./node_modules/.bin/babel-tape-runner ./test/**/*-spec.js #| ./node_modules/.bin/faucet
+	./node_modules/.bin/babel-tape-runner ./test/**/*-spec.js | ./node_modules/.bin/faucet
 
 browser:
 	./node_modules/.bin/browserify \
-		--transform babelify \
-		--transform riotify \
+		--transform [babelify --blacklist regenerator ] \
 		--debug ./test/*.js \
-		| ./node_modules/.bin/browser-run -p 2222  #\
+		| ./node_modules/.bin/browser-run -p 2222  \
 		| ./node_modules/.bin/faucet
 
 

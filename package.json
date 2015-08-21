@@ -1,6 +1,6 @@
 {
   "name": "leopold",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Event-sourced processing",
   "main": "index.js",
   "scripts": {
@@ -11,9 +11,9 @@
     "url": "https://github.com/mnichols/leopold"
   },
   "keywords": [
-    "event-source",
+    "event-sourcing",
     "esp",
-    "meerkats"
+    "meerkats" 
   ],
   "author": "Mike Nichols <nichols.mike.s@gmail.com>",
   "license": "MIT",

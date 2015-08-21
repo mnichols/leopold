@@ -127,4 +127,16 @@ return leo.mount(envelope)
 
 ```
 
-//more docs on the way...
+### Dependencies
+
+`leopold` uses [stampit](https://github.com/stampit-org/stampit) under the hood
+and the `eventable` call presumes you are composing event source behavior
+into an prototype ('spec').
+
+`leopold` is also using some ES6 features that require [babel](http://babeljs.io/).
+
+
+### Running tests
+
+`make test` (nodejs)
+`make browser` (browser) then visit on any browser at `http://localhost:2222`
