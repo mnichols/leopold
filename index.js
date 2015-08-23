@@ -8,6 +8,13 @@ import cuid from 'cuid'
 function isFunction(obj) {
     return obj && toString.call(obj === '[object Function]')
 }
+
+const trackable = stampit()
+    .methods({
+        register: function(id, provider) {
+            return this.identityMap.register(id, provider)
+        }
+    })
 /**
  * accepts `_id` as an initial id value. if an `id` function
  * exists (further up the composition chain) it does not override it;
@@ -19,8 +26,18 @@ const identifiable = stampit()
         let id = this._id
         ;(delete this._id)
         if(!isFunction(this.id)) {
-            this.id = function() {
+            this.id = function(val) {
+                if(id && val) {
+                    throw new Error('`id` is already set as "' + id + '"' )
+                }
+                if(val) {
+                    this.register(val, this)
+                    return (id = val)
+                }
                 return (id || (id = cuid() ))
+            }
+            this.hasIdentity = () => {
+                return (typeof(id) !== 'undefined')
             }
         }
     })
@@ -250,6 +267,12 @@ const eventable = stampit()
             })
         }
 
+        let assertIdentity = () => {
+            if(!this.hasIdentity()) {
+                throw new Error('identity is unknown')
+            }
+        }
+
         let validateEvents = function (arr) {
             for(let e of arr) {
                 if(!e || !e.event) {
@@ -259,6 +282,7 @@ const eventable = stampit()
             return arr
         }
         this.raise = function (e) {
+            assertIdentity()
             if(!Array.isArray(e)) {
                 e = [e]
             }
@@ -291,8 +315,10 @@ const eventable = stampit()
                 .return(this)
 
         }
-        //register this instance on the unit of work
-        uow.register(this.id(), this)
+        if(this.hasIdentity()) {
+            //register this instance on the unit of work
+            this.register(this.id(), this)
+        }
     })
 
 export default stampit()
@@ -315,6 +341,7 @@ export default stampit()
         this.eventable = () => {
             return stampit()
                 .props({leo: this})
+                .compose(trackable({ identityMap: this.identityMap}))
                 .compose(identifiable)
                 .compose(revisable)
                 .compose(eventable)

@@ -13,7 +13,7 @@ $(COMPILED_JS): $(JS)
 	@export NODE_PATH=$(NODE_PATH):$(SRC_DIR); \
 		./node_modules/.bin/browserify \
 			--outfile $(COMPILED_JS) \
-			--standalone fatos \
+			--standalone leopold \
 			--transform babelify \
 			--paths ./$(SRC_DIR) \
 			--debug

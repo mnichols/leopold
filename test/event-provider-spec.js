@@ -26,6 +26,15 @@ test('extending id-less object', assert => {
     let model = sut.eventable().create()
     assert.ok(model.id())
 })
+test.only('lazy identification is write-once', (assert) => {
+    assert.plan(1)
+    let sut = leo()
+    let model = sut.eventable().create()
+    model.id('boing')
+    assert.equal(model.id(),'boing')
+    assert.throws(model.id.bind(model,'bing'))
+
+})
 test('extending function id`d object', assert => {
     assert.plan(1)
     let sut = leo()

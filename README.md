@@ -63,8 +63,8 @@ const customerSpec = stampit()
         }
         , $accountApproved: function(e) {
             //use special _id attribute to initialize new account
-            return account({ _id: e.accountName})
-                .initialize(e.accountName)
+            return account()
+                .initialize(e.accountId, e.accountName)
                 .bind(this)
                 .then(function(newAccount) {
                     this.accounts[e.accountName] = newAccount
@@ -77,13 +77,15 @@ const customerSpec = stampit()
             })
         }
         , approveAccount: function(accountName) {
+            let acctId = cuid()
             return this.raise({
                 event: 'accountApproved'
                 , accountName: accountName
+                , accountId: acctId
             })
             .bind(this)
             .then(function(){
-                return this.accounts[accountName].initialize()
+                return this.accounts[acctId].initialize()
             })
         }
         , makeDeposit: function(account, amount) {
@@ -123,7 +125,7 @@ return leo.mount(envelope)
         return leo.restore(instance, 0 , Number.MAX_VALUE)
     })
 
-// instance.accounts['checking'].balance === 300.42
+// instance.accounts[{cuid}].balance === 300.42
 
 ```
 
