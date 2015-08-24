@@ -9,12 +9,6 @@ function isFunction(obj) {
     return obj && toString.call(obj === '[object Function]')
 }
 
-const trackable = stampit()
-    .methods({
-        register: function(id, provider) {
-            return this.identityMap.register(id, provider)
-        }
-    })
 /**
  * accepts `_id` as an initial id value. if an `id` function
  * exists (further up the composition chain) it does not override it;
@@ -26,14 +20,7 @@ const identifiable = stampit()
         let id = this._id
         ;(delete this._id)
         if(!isFunction(this.id)) {
-            this.id = function(val) {
-                if(id && val) {
-                    throw new Error('`id` is already set as "' + id + '"' )
-                }
-                if(val) {
-                    this.register(val, this)
-                    return (id = val)
-                }
+            this.id = function() {
                 return (id || (id = cuid() ))
             }
             this.hasIdentity = () => {
@@ -260,9 +247,10 @@ const eventable = stampit()
         let uow = this.leo.unitOfWork()
         //decorate event(s) with critical properties
         let decorate = (arr) => {
+            let rev = this.nextRevision()
             return arr.map((e) => {
                 e.id = this.id()
-                e.revision = this.nextRevision()
+                e.revision = rev++
                 return e
             })
         }
@@ -295,30 +283,25 @@ const eventable = stampit()
             .bind(this)
             .then(this.applyEvent)
         }
-        this.applyEvent = function(e) {
-            this.revision(e.revision)
+        const applyEvent = (promise, e) => {
             if(Array.isArray(e)) {
                 return Promise.resolve(e)
                     .bind(this)
-                    .map(this.applyEvent)
+                    .each(applyEvent.bind(this, promise))
                     .return(this)
             }
-            return Promise.resolve(this)
-                .bind(this)
-                .tap(function(){
-                    let fn = this['$' + e.event]
-                    if(!fn) {
-                        return this
-                    }
-                    return fn.call(this, e)
-                })
-                .return(this)
-
+            this.revision(e.revision)
+            let fn = this['$' + e.event]
+            if(!fn) {
+                return this
+            }
+            return promise.then(fn.bind(this, e))
         }
-        if(this.hasIdentity()) {
-            //register this instance on the unit of work
-            this.register(this.id(), this)
+        this.applyEvent = function(e) {
+            return applyEvent(Promise.resolve(this),e)
         }
+        //register this instance on the unit of work
+        uow.register(this.id(), this)
     })
 
 export default stampit()
@@ -341,7 +324,6 @@ export default stampit()
         this.eventable = () => {
             return stampit()
                 .props({leo: this})
-                .compose(trackable({ identityMap: this.identityMap}))
                 .compose(identifiable)
                 .compose(revisable)
                 .compose(eventable)
