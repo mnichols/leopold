@@ -28,6 +28,36 @@ test('event provider events are stored', (assert) => {
     sut.commit()
     assert.equal(envelopes.length, 1)
 })
+test('[async] event provider events are stored', (assert) => {
+    assert.plan(1)
+    let envelopes = []
+    let storage = {
+        store: function(env) {
+            envelopes.push(env)
+
+        }
+        //append: envelopes.push.apply(envelopes)
+    }
+    let sut = leo({
+        storage: storage
+    })
+    let model = stampit({
+        methods: {
+            $foo(){
+                return Promise.resolve()
+            }
+        }
+    })
+    .compose(sut.eventable())
+    .create()
+    return model.raise({event: 'foo'})
+        .bind(sut)
+        .then(sut.commit)
+        .then(function(){
+            assert.equal(envelopes.length,1)
+
+        })
+})
 test('restoring throwing event handler bubble up error',(assert) => {
     assert.plan(1)
     let sut = leo()
