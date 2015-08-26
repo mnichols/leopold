@@ -163,21 +163,25 @@ const readableUnitOfWork = stampit()
         }
         this.register = this.identityMap.register
 
+        //helper function to allow function binding during iteration
+        function asyncApply(event, identityMap) {
+            let target = identityMap.get(event.id)
+            return target.applyEvent(event)
+        }
         const iterate = (cur, iterator, accumulator) => {
             if(cur.done) {
                 return accumulator
             }
             let event = cur.value
-            console.log('restoring',event);
-            let target = this.identityMap.get(event.id)
             let result  = undefined
-            let fn = target.applyEvent.bind(target, event)
             if(accumulator.promise) {
-                accumulator.promise = result = accumulator
-                    .promise
-                    .bind(target)
-                    .then(fn)
+                //chain promises
+                //effectively creating a complicated reduce statement
+                accumulator.promise = result = accumulator.promise
+                    .then(asyncApply.bind(this, event, this.identityMap))
             } else {
+                let target = this.identityMap.get(event.id)
+                let fn = target.applyEvent.bind(target, event)
                 try  {
                     result = fn()
                 } catch(err) {
@@ -186,10 +190,11 @@ const readableUnitOfWork = stampit()
                 }
                 //was a promise returned?
                 if(result && result.then) {
+                    console.log('promise returned');
                     accumulator.promise = result
                 }
             }
-            return iterate(iterator.next(), iterator, accumulator, result)
+            return iterate(iterator.next(), iterator, accumulator)
             /*
             result = target.applyEvent
             return target.applyEvent(event)
@@ -210,6 +215,9 @@ const readableUnitOfWork = stampit()
             let events = this.storage.events(from, to)
             let accumulator = {}
             iterate(events.next(),events,accumulator)
+            if(accumulator.promise) {
+                return accumulator.promise
+            }
             return this
         }
     })
