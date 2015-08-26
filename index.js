@@ -251,7 +251,6 @@ const unitOfWork = stampit()
         this.append = (e) => {
             let result = current.append(e)
             if(!this.atomic) {
-                console.log('commiting');
                 //each event gets stored
                 this.commit()
                 return result
