@@ -3,8 +3,10 @@
 import leo from '..'
 import test from 'blue-tape'
 import stampit from 'stampit'
+import Promise from 'bluebird'
 
-test('event provider events are stored', (assert) => {
+test('[sync] event provider events are stored', (assert) => {
+    assert.plan(1)
     let envelopes = []
     let storage = {
         store: function(env) {
@@ -23,11 +25,37 @@ test('event provider events are stored', (assert) => {
     })
     .compose(sut.eventable())
     .create()
+    model.raise({event: 'foo'})
+    sut.commit()
+    assert.equal(envelopes.length, 1)
+})
+test('[async] event provider events are stored', (assert) => {
+    assert.plan(1)
+    let envelopes = []
+    let storage = {
+        store: function(env) {
+            envelopes.push(env)
+
+        }
+        //append: envelopes.push.apply(envelopes)
+    }
+    let sut = leo({
+        storage: storage
+    })
+    let model = stampit({
+        methods: {
+            $foo(){
+                return Promise.resolve()
+            }
+        }
+    })
+    .compose(sut.eventable())
+    .create()
     return model.raise({event: 'foo'})
         .bind(sut)
         .then(sut.commit)
-        .then(()=>{
-            assert.equal(envelopes.length, 1)
+        .then(function(){
+            assert.equal(envelopes.length,1)
         })
 })
 test('restoring throwing event handler bubble up error',(assert) => {
@@ -45,15 +73,11 @@ test('restoring throwing event handler bubble up error',(assert) => {
         revision: 1
         , events: [ { event: 'foo', id: 1, revision: 1 }]
     }
-    return sut.mount(env)
-        .then(function(){
-            return sut.restore(throwing,0,1)
-        })
-        ['catch'](function(err) {
-            assert.equal(err.message,'i have fooed')
-        })
+    sut.mount(env)
+    assert.throws(sut.restore.bind(sut, throwing, 0, 1),/i have fooed/)
 })
-test('restoring event providers works', (assert) => {
+test('[sync] restoring event providers works', (assert) => {
+    assert.plan(5)
     let envelopes = []
     let storage = {
         append: function(env) {
@@ -69,6 +93,81 @@ test('restoring event providers works', (assert) => {
                     .compose(this.leo.eventable())
                     .create({_id: e.childId})
                 this.children[e.childId] = child
+            }
+            , addChild : function(name) {
+                let kid = this.nextId()
+                this.raise({
+                    event: 'childAdded'
+                    , childId: kid
+                })
+                this.nameChild(kid, name)
+            }
+            , nameChild : function( id, name) {
+                this.children[id].name(name)
+            }
+        })
+        .init(function(){
+            let kid = 2
+            this.children = {}
+            this.nextId = function(){
+                return kid++
+            }
+        })
+    let childModel = stampit()
+        .methods({
+            $named : function(e) {
+                this._name = e.name
+            }
+            , name : function(name) {
+                this.raise({ event: 'named', name: name })
+            }
+
+        })
+
+    let events = [
+        { id: 1, event: 'childAdded', revision: 2, childId: 2}
+        , { id: 2, event: 'named', revision: 2, name: 'joshua'}
+        , { id: 1, event: 'childAdded', revision: 3, childId: 3}
+        , { id: 3, event: 'named', revision: 2, name: 'chay'}
+    ]
+
+    let parent = parentModel
+        .compose(sut.eventable())
+        .create({ _id: 1})
+
+    sut.mount({revision: 1, events: events})
+    sut.restore(parent, 0, 1)
+    assert.ok(parent.children[2])
+    assert.ok(parent.children[3])
+    assert.equal(parent.revision(),3)
+    assert.equal(parent.children[2]._name,'joshua')
+    assert.equal(parent.children[3]._name,'chay')
+})
+
+
+test('[async] restoring event providers works', (assert) => {
+    assert.plan(5)
+    let envelopes = []
+    let storage = {
+        append: function(env) {
+            envelopes.push(env)
+        }
+    }
+    let sut = leo()
+
+    let parentModel = stampit()
+        .methods({
+            $childAdded :function(e) {
+                return Promise.resolve()
+                    .bind(this)
+                    .tap(function(){
+                        console.log('adding child',e.childId);
+                        let child = childModel
+                            .compose(this.leo.eventable())
+                            .create({_id: e.childId})
+                        this.children[e.childId] = child
+                    })
+
             }
             , addChild : function(name) {
                 let kid = this.nextId()
@@ -111,16 +210,14 @@ test('restoring event providers works', (assert) => {
         .compose(sut.eventable())
         .create({ _id: 1})
 
-    return sut.mount({revision: 1, events: events})
+    sut.mount({revision: 1, events: events})
+    return sut.restore(parent, 0, 1)
         .then(function(){
-            return sut.restore(parent, 0, 1)
-            .then(function(){
-                assert.ok(parent.children[2])
-                assert.ok(parent.children[3])
-                assert.equal(parent.revision(),3)
-                assert.equal(parent.children[2]._name,'joshua')
-                assert.equal(parent.children[3]._name,'chay')
-            })
+            assert.ok(parent.children[2])
+            assert.ok(parent.children[3])
+            assert.equal(parent.revision(),3)
+            assert.equal(parent.children[2]._name,'joshua')
+            assert.equal(parent.children[3]._name,'chay')
         })
 })
 
