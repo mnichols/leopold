@@ -5,6 +5,7 @@ import test from 'blue-tape'
 import stampit from 'stampit'
 
 test('event provider events are stored', (assert) => {
+    assert.plan(1)
     let envelopes = []
     let storage = {
         store: function(env) {
@@ -23,12 +24,9 @@ test('event provider events are stored', (assert) => {
     })
     .compose(sut.eventable())
     .create()
-    return model.raise({event: 'foo'})
-        .bind(sut)
-        .then(sut.commit)
-        .then(()=>{
-            assert.equal(envelopes.length, 1)
-        })
+    model.raise({event: 'foo'})
+    sut.commit()
+    assert.equal(envelopes.length, 1)
 })
 test('restoring throwing event handler bubble up error',(assert) => {
     assert.plan(1)
@@ -45,15 +43,11 @@ test('restoring throwing event handler bubble up error',(assert) => {
         revision: 1
         , events: [ { event: 'foo', id: 1, revision: 1 }]
     }
-    return sut.mount(env)
-        .then(function(){
-            return sut.restore(throwing,0,1)
-        })
-        ['catch'](function(err) {
-            assert.equal(err.message,'i have fooed')
-        })
+    sut.mount(env)
+    assert.throws(sut.restore.bind(sut, throwing, 0, 1),/i have fooed/)
 })
 test('restoring event providers works', (assert) => {
+    assert.plan(5)
     let envelopes = []
     let storage = {
         append: function(env) {
@@ -111,17 +105,13 @@ test('restoring event providers works', (assert) => {
         .compose(sut.eventable())
         .create({ _id: 1})
 
-    return sut.mount({revision: 1, events: events})
-        .then(function(){
-            return sut.restore(parent, 0, 1)
-            .then(function(){
-                assert.ok(parent.children[2])
-                assert.ok(parent.children[3])
-                assert.equal(parent.revision(),3)
-                assert.equal(parent.children[2]._name,'joshua')
-                assert.equal(parent.children[3]._name,'chay')
-            })
-        })
+    sut.mount({revision: 1, events: events})
+    sut.restore(parent, 0, 1)
+    assert.ok(parent.children[2])
+    assert.ok(parent.children[3])
+    assert.equal(parent.revision(),3)
+    assert.equal(parent.children[2]._name,'joshua')
+    assert.equal(parent.children[3]._name,'chay')
 })
 
 

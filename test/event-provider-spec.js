@@ -20,6 +20,7 @@ const fireable = () => {
         })
 }
 
+
 test('extending id-less object', ( assert ) => {
     assert.plan(1)
     let sut = leo()
@@ -57,27 +58,26 @@ test('raising event without `event` throws',  ( assert ) => {
     assert.throws(model.raise.bind(model,{event: undefined}),/`event` is required/)
 })
 test('raising event without handler is ok',(assert) => {
+    assert.plan(1)
     let sut = leo()
     const model = stampit()
         .compose(sut.eventable())
         .create()
-    return model.raise({event: 'foo'})
-        .then(function(){
-            assert.pass('no handler is ok')
-        })
+    model.raise({ event: 'foo'})
+    assert.pass('no handler is ok')
 })
 test('raising event mutates provider',  ( assert ) => {
+    assert.plan(1)
     let sut = leo()
     const model = fireable()
         .compose(sut.eventable())
         .create()
 
-    return model.fire({ name: 'bleh'})
-        .tap( its => {
-            assert.equal(its.name,'bleh')
-        })
+    model.fire({ name: 'bleh'})
+    assert.equal(model.name,'bleh')
 })
-test('raising events array mutates provider predictable', ( assert )=> {
+test('raising events array predictably mutates provider', ( assert )=> {
+    assert.plan(1)
     let sut = leo()
     let model = stampit()
         .methods({
@@ -101,14 +101,14 @@ test('raising events array mutates provider predictable', ( assert )=> {
         })
         .compose(sut.eventable())
         .create()
-    return model.fire()
-        .then(function(){
-            assert.equal(model.next,1)
-        })
-
+    model.fire()
+    .then(function(){
+        assert.equal(model.next,1)
+    })
 
 })
 test('raising event increments revision',  ( assert ) => {
+    assert.plan(2)
     let sut = leo()
     const model = fireable()
         .compose(sut.eventable())
@@ -116,8 +116,7 @@ test('raising event increments revision',  ( assert ) => {
 
     assert.equal(model.revision(),1)
 
-    return model.fire({ name: 'bleh'})
-        .tap( its => {
-            assert.equal(its.revision(),2)
-        })
+    model.fire({ name: 'bleh'})
+    assert.equal(model.revision(),2)
 })
+

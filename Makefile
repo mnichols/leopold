@@ -32,7 +32,7 @@ clean:
 	mkdir $(BUILD_DIR)
 
 test:
-	./node_modules/.bin/babel-tape-runner ./test/**/*-spec.js | ./node_modules/.bin/faucet
+	./node_modules/.bin/babel-tape-runner ./test/**/*-spec.js #| ./node_modules/.bin/faucet
 
 browser:
 	./node_modules/.bin/browserify \

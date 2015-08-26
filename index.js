@@ -138,13 +138,10 @@ const writeableUnitOfWork = stampit()
         }
         this.commit = () => {
             //move reference to array in case event arrives while flushing
-            let commitable = pending.splice(0,pending.length)
-            return Promise.resolve(commitable)
-                .bind(this)
-                .then(this.envelope)
-                .bind(this.storage)
-                .tap(this.storage.store)
-                .return(this)
+            let committable = pending.splice(0,pending.length)
+            let envelope = this.envelope(committable)
+            this.storage.store(envelope)
+            return this
         }
         this.register = function() {
             //no op
@@ -166,12 +163,35 @@ const readableUnitOfWork = stampit()
         }
         this.register = this.identityMap.register
 
-        const iterate = (cur, iterator) => {
+        const iterate = (cur, iterator, accumulator) => {
             if(cur.done) {
-                return Promise.resolve(this)
+                return accumulator
             }
             let event = cur.value
+            console.log('restoring',event);
             let target = this.identityMap.get(event.id)
+            let result  = undefined
+            let fn = target.applyEvent.bind(target, event)
+            if(accumulator.promise) {
+                accumulator.promise = result = accumulator
+                    .promise
+                    .bind(target)
+                    .then(fn)
+            } else {
+                try  {
+                    result = fn()
+                } catch(err) {
+                    iterator.throw(err)
+                    throw err
+                }
+                //was a promise returned?
+                if(result && result.then) {
+                    accumulator.promise = result
+                }
+            }
+            return iterate(iterator.next(), iterator, accumulator, result)
+            /*
+            result = target.applyEvent
             return target.applyEvent(event)
                 .bind(this)
                 .then(function(){
@@ -180,6 +200,7 @@ const readableUnitOfWork = stampit()
                     iterator.throw(err)
                     return err
                 })
+            */
         }
         this.restore = (root, from, to) => {
             if(!root) {
@@ -187,7 +208,9 @@ const readableUnitOfWork = stampit()
             }
             this.register(root.id(),root)
             let events = this.storage.events(from, to)
-            return iterate(events.next(),events)
+            let accumulator = {}
+            iterate(events.next(),events,accumulator)
+            return this
         }
     })
 
@@ -219,23 +242,29 @@ const unitOfWork = stampit()
             return current.append(e)
         }
         this.commit = () => {
-            return current.commit()
-                .bind(this.identityMap)
-                .tap(this.identityMap.release)
-                .return(this)
+            current.commit()
+            this.identityMap.release()
+            return this
         }
         this.register = (id, provider) => {
             return current.register(id, provider)
         }
         this.restore = (root, from, to) => {
             current = readable
-            return current.restore(root, from, to)
+            let result = current.restore(root, from, to)
+            if(result.then) {
+                return result
                 .bind(this)
                 .then(function(){
                     this.identityMap.release()
                     current = writeable
                     return this
                 })
+            } else {
+                this.identityMap.release()
+                current = writeable
+                return this
+            }
         }
 
         //by default we are in writeable state
@@ -276,29 +305,55 @@ const eventable = stampit()
             }
             validateEvents(e)
             decorate(e)
-
-            return Promise.resolve(e)
-            .bind(uow)
-            .tap(uow.append)
-            .bind(this)
-            .then(this.applyEvent)
+            uow.append(e)
+            return this.applyEvent(e)
         }
-        const applyEvent = (promise, e) => {
-            if(Array.isArray(e)) {
-                return Promise.resolve(e)
+        const applyEvent = (e, applied) => {
+            if(applied.length === e.length) {
+                return applied
+            }
+            let current = e[applied.length]
+            this.revision(current.revision)
+            applied.length = applied.length + 1
+
+            let fn = this['$' + current.event]
+            let result = undefined
+
+            if(applied.promise) {
+                if(!fn) {
+                    return applyEvent(e, applied, promise)
+                }
+                applied.promise = result = applied.promise
+                    .return(current)
                     .bind(this)
-                    .each(applyEvent.bind(this, promise))
-                    .return(this)
+                    .then(fn)
+            } else {
+                if(!fn) {
+                    return applyEvent(e, applied)
+                }
+                result = fn.call(this, current)
+                //received a promise
+                if(result && result.then) {
+                    applied.promise = result
+                }
             }
-            this.revision(e.revision)
-            let fn = this['$' + e.event]
-            if(!fn) {
-                return this
-            }
-            return promise.then(fn.bind(this, e))
+            applied.results.push(result)
+            return applyEvent(e, applied)
         }
         this.applyEvent = function(e) {
-            return applyEvent(Promise.resolve(this),e)
+            if(!Array.isArray(e)) {
+                e = [e]
+            }
+            let applied = {
+                results: []
+                , async: false
+                , length: 0
+            }
+            applyEvent(e,applied)
+            if(applied.promise) {
+                return Promise.all(applied.results)
+            }
+            return this
         }
         //register this instance on the unit of work
         uow.register(this.id(), this)
@@ -348,9 +403,8 @@ export default stampit()
          * useful for testing, or perhaps seeding an app from a backend
          * */
         this.mount = (envelope) => {
-            return Promise.resolve(envelope)
-                .bind(this.storage)
-                .then(this.storage.store)
+            this.storage.store(envelope)
+            return this
         }
         /**
          * restore to revision `to` from revision `from`
