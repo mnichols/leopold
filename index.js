@@ -84,6 +84,14 @@ const hashIdentityMap = stampit().init(function(){
 
 })
 
+const nullStorage = stampit()
+    .init(function(){
+        this.store = () => { }
+        this.events = function*(from, to) {
+            return []
+        }
+        this.clear = () => { }
+    })
 const inMemoryStorage = stampit()
     .compose(revisable)
     .init(function() {
@@ -94,6 +102,12 @@ const inMemoryStorage = stampit()
             }
             envelopes.push(env)
             return this
+        }
+        /**
+         * clear all envelops. DANGER ZONE!
+         * */
+        this.clear = () => {
+            envelopes = []
         }
         this.events = function*(from, to) {
             from = (from || 0)
@@ -159,7 +173,7 @@ const readableUnitOfWork = stampit()
             return e
         }
         this.commit = () => {
-            return Promise.resolve(this)
+            return this
         }
         this.register = this.identityMap.register
 
@@ -190,22 +204,10 @@ const readableUnitOfWork = stampit()
                 }
                 //was a promise returned?
                 if(result && result.then) {
-                    console.log('promise returned');
                     accumulator.promise = result
                 }
             }
             return iterate(iterator.next(), iterator, accumulator)
-            /*
-            result = target.applyEvent
-            return target.applyEvent(event)
-                .bind(this)
-                .then(function(){
-                    return iterate(iterator.next(), iterator)
-                }, function(err) {
-                    iterator.throw(err)
-                    return err
-                })
-            */
         }
         this.restore = (root, from, to) => {
             if(!root) {
@@ -247,7 +249,14 @@ const unitOfWork = stampit()
         })
 
         this.append = (e) => {
-            return current.append(e)
+            let result = current.append(e)
+            if(!this.atomic) {
+                console.log('commiting');
+                //each event gets stored
+                this.commit()
+                return result
+            }
+            return result
         }
         this.commit = () => {
             current.commit()
@@ -368,7 +377,23 @@ const eventable = stampit()
     })
 
 export default stampit()
+    .static({
+        /**
+         * null object pattern for storage
+         * when memory footprint is a concern or YAGNI storage
+         * but want the benefits of event provider.
+         * Handy for testing
+         * */
+        nullStorage: nullStorage
+    })
     .compose(identifiable)
+    .refs({
+        /**
+         * `false` immediately stores events; otherwise, they are
+         * queued to be committed to storage later.
+         * */
+        atomic: true
+    })
     .init(function() {
         this.storage = (this.storage || inMemoryStorage())
         this.identityMap = (this.identityMap || hashIdentityMap())
@@ -376,6 +401,7 @@ export default stampit()
         let uow = unitOfWork({
             storage: this.storage
             , identityMap: this.identityMap
+            , atomic: this.atomic
         })
         /**
          * Expose an `stamp` that may be use for composition
@@ -424,6 +450,10 @@ export default stampit()
          */
         this.restore = (root, from, to) => {
             return this.unitOfWork().restore(root, from, to)
+        }
+
+        this.revision = () => {
+            return this.storage.revision()
         }
     })
 

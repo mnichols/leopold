@@ -29,6 +29,45 @@ test('[sync] event provider events are stored', (assert) => {
     sut.commit()
     assert.equal(envelopes.length, 1)
 })
+test('[sync] false atomicity carries no need to commit', (assert) => {
+    assert.plan(1)
+    let envelopes = []
+    let storage = {
+        store: function(env) {
+            envelopes.push(env)
+
+        }
+    }
+    let sut = leo({
+        storage: storage
+        , atomic: false
+    })
+    let model = stampit({
+        methods: {
+            $foo(){}
+        }
+    })
+    .compose(sut.eventable())
+    .create()
+    model.raise({event: 'foo'})
+    assert.equal(envelopes.length, 1)
+})
+test('[sync] null storage works', (assert) => {
+    assert.plan(1)
+    let sut = leo({
+        storage: leo.nullStorage()
+        , atomic: false
+    })
+    let model = stampit({
+        methods: {
+            $foo(){ this.fooed = true }
+        }
+    })
+    .compose(sut.eventable())
+    .create()
+    model.raise({event: 'foo'})
+    assert.true(model.fooed)
+})
 test('[async] event provider events are stored', (assert) => {
     assert.plan(1)
     let envelopes = []
