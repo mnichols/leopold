@@ -337,7 +337,7 @@ const eventable = stampit()
 
             if(applied.promise) {
                 if(!fn) {
-                    return applyEvent(e, applied, promise)
+                    return applyEvent(e, applied)
                 }
                 applied.promise = result = applied.promise
                     .return(current)
