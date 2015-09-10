@@ -8,6 +8,9 @@
 
 ## Event-sourced models for nodejs or browser
 
+[![GitHub stars](https://img.shields.io/github/stars/badges/shields.svg?style=social&label=Star)](https://github.com/mnichols/leopold)
+[![Build Status: Linux](https://travis-ci.org/mnichols/leopold?branch=master)](https://travis-ci.org/mnichols/leopold)
+
 ### Install
 
 `npm install --save leopold`
