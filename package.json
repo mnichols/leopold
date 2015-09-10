@@ -45,6 +45,7 @@
     "browserify": "^11.0.1",
     "doxx": "^2.0.0",
     "faucet": "0.0.1",
+    "gh-pages": "^0.4.0",
     "rimraf": "^2.4.3"
   },
   "dependencies": {
