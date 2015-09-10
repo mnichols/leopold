@@ -1,6 +1,6 @@
 {
   "name": "leopold",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Event-sourced state support",
   "main": "./dist/leopold.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "build": "npm run clean && babel src --out-dir dist",
     "docs": "doxx --source src --target docs",
     "gh-pages": "npm run docs && gh-pages -d docs",
-    "prepublish": "npm run build && npm test && npm gh-pages"
+    "prepublish": "npm run build && npm test && npm run gh-pages"
   },
   "repository": {
     "type": "git",
