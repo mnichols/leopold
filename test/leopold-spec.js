@@ -1,6 +1,6 @@
 'use strict';
 
-import leo from '..'
+import leo from '../src/leopold'
 import test from 'blue-tape'
 import stampit from 'stampit'
 import Promise from 'bluebird'

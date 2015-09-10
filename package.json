@@ -1,10 +1,15 @@
 {
   "name": "leopold",
-  "version": "0.1.3",
-  "description": "Event-sourced processing",
-  "main": "index.js",
+  "version": "0.1.4",
+  "description": "Event-sourced state support",
+  "main": "./dist/leopold.js",
   "scripts": {
-    "test": "make test"
+    "clean": "rimraf dist/* && mkdir dist || true",
+    "test": "babel-tape-runner ./test/**/*-spec.js | faucet",
+    "build": "npm run clean && babel src --out-dir dist",
+    "docs": "doxx --source src --target docs",
+    "gh-pages": "npm run docs && gh-pages -d docs",
+    "prepublish": "npm run build && npm test && npm gh-pages"
   },
   "repository": {
     "type": "git",
@@ -22,18 +27,25 @@
   },
   "homepage": "https://github.com/mnichols/leopold",
   "browserify": {
-      "transform": [
-          ["babelify", { "blacklist": "regenerator" } ]
+    "transform": [
+      [
+        "babelify",
+        {
+          "blacklist": "regenerator"
+        }
       ]
+    ]
   },
   "devDependencies": {
-    "babel": "^5.8.21",
+    "babel": "^5.8.23",
     "babel-tape-runner": "^1.2.0",
     "babelify": "^6.1.3",
     "blue-tape": "^0.1.10",
     "browser-run": "^2.1.2",
     "browserify": "^11.0.1",
-    "faucet": "0.0.1"
+    "doxx": "^2.0.0",
+    "faucet": "0.0.1",
+    "rimraf": "^2.4.3"
   },
   "dependencies": {
     "bluebird": "^2.9.34",
