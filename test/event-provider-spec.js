@@ -1,5 +1,5 @@
 import test from 'blue-tape'
-import leo from '..'
+import leo from '../src/leopold'
 import stampit from 'stampit'
 import Promise from 'bluebird'
 
