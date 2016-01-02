@@ -77,6 +77,7 @@ const customerSpec = stampit()
             return this.raise({
                 event: 'initialized'
                 , name: name
+                , id: 42
             })
         }
         , approveAccount: function(accountName) {
@@ -131,6 +132,46 @@ return leo.mount(envelope)
 // instance.accounts[{cuid}].balance === 300.42
 
 ```
+
+### Taking advantage of events for testing side effects
+
+```js
+
+import leopold from 'leopold'
+import stampit from 'stampit'
+
+// create a leo that includes a unit of work and factory for event providers
+const envelopes = []
+const storage = {
+    store(env) { envelopes.push(env )}
+}
+const leo = leopold({
+    //this commits events right away
+    atomic: false
+    , storage
+})
+
+const myModel = stampit()
+    .methods({
+        // by convention, event handlers are named '$' + '${event.name}'
+        // async handlers are supported
+        $initialized: function(e) {
+            //do stuff
+        }
+        , initialize: function() {
+            return this.raise({ event: ‘initialized’})
+        }
+    })
+    .compose(leo.eventable())
+
+myModel.initialize()
+envelopes.length === 1 // true
+envelopes[0].events[0].event === ‘initialized’ // true
+
+```
+
+
+
 
 ### Dependencies
 

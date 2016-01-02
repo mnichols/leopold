@@ -120,7 +120,8 @@ const inMemoryStorage = stampit()
             }
             for(let env of envelopes) {
                 if(env.revision > to) {
-                    return //we are done streaming
+                    //we are done streaming
+                    return
                 }
                 if(env.revision >= from) {
                     for(let ev of env.events) {

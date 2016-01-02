@@ -5,7 +5,7 @@
   "main": "./dist/leopold.js",
   "scripts": {
     "clean": "rimraf dist/* && mkdir dist || true",
-    "test": "babel-tape-runner ./test/**/*-spec.js | faucet",
+    "test": "babel-tape-runner ./test/**/*-spec.js #| faucet",
     "build": "npm run clean && babel src --out-dir dist",
     "docs": "doxx --source src --target docs",
     "gh-pages": "npm run docs && gh-pages -d docs",
