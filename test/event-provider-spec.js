@@ -21,6 +21,22 @@ const fireable = () => {
 }
 
 
+const pushable = () => {
+    var spec = {
+    }
+    return stampit()
+        .methods({
+            push (args) {
+                return this.pushEvent({
+                    event: 'pushed'
+                    , name: args.name
+                })
+            }
+            , $pushed (e) {
+                this.name = e.name
+            }
+        })
+}
 test('extending id-less object', ( assert ) => {
     assert.plan(1)
     let sut = leo()
@@ -69,7 +85,7 @@ test('raising event without handler is ok',(assert) => {
     assert.pass('no handler is ok')
 })
 test('raising event mutates provider',  ( assert ) => {
-    assert.plan(2)
+    assert.plan(1)
     let sut = leo()
     const model = fireable()
         .compose(sut.eventable())
@@ -121,4 +137,18 @@ test('raising event increments revision',  ( assert ) => {
     model.fire({ name: 'bleh'})
     assert.equal(model.revision(),2)
 })
+test('pushing event increments revision and is on storage but does not mutate provider first time',  ( assert ) => {
+    assert.plan(3)
+    let sut = leo()
+    const model = pushable()
+        .compose(sut.eventable())
+        .create()
+
+    assert.equal(model.revision(),1)
+
+    model.push({ name: 'bleh'})
+    assert.equal(model.revision(),2)
+    assert.notOk(model.name)
+})
+
 

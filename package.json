@@ -1,11 +1,11 @@
 {
   "name": "leopold",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Event-sourced state support",
   "main": "./dist/leopold.js",
   "scripts": {
     "clean": "rimraf dist/* && mkdir dist || true",
-    "test": "babel-tape-runner ./test/**/*-spec.js #| faucet",
+    "test": "babel-tape-runner ./test/**/*-spec.js | faucet",
     "build": "npm run clean && babel src --out-dir dist",
     "docs": "doxx --source src --target docs",
     "gh-pages": "npm run docs && gh-pages -d docs",
@@ -29,24 +29,12 @@
     "url": "https://github.com/mnichols/leopold/issues"
   },
   "homepage": "https://github.com/mnichols/leopold",
-  "browserify": {
-    "transform": [
-      [
-        "babelify",
-        {
-          "blacklist": "regenerator"
-        }
-      ]
-    ]
-  },
   "devDependencies": {
     "babel-cli": "^6.2.0",
     "babel-preset-node5": "^6.2.1",
     "babel-tape-runner": "^1.2.0",
     "babelify": "^6.1.3",
     "blue-tape": "^0.1.10",
-    "browser-run": "^2.1.2",
-    "browserify": "^11.0.1",
     "doxx": "^2.0.0",
     "faucet": "0.0.1",
     "gh-pages": "^0.4.0",

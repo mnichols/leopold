@@ -315,7 +315,8 @@ const eventable = stampit()
             }
             return arr
         }
-        this.raise = function (e) {
+
+        let pushEvent = (e) => {
             assertIdentity()
             if(!Array.isArray(e)) {
                 e = [e]
@@ -323,7 +324,29 @@ const eventable = stampit()
             validateEvents(e)
             decorate(e)
             uow.append(e)
-            return this.applyEvent(e)
+            return e
+        }
+        /**
+         * raise is the main interface you will use to mutate the eventable
+         * instance and push the events onto the unit of work into storage.
+         * The eventable instance revision is incremented.
+         * @param {Object|Array} e the event(s) to push
+         * @return {eventable}  the result of `${event}` calls
+         * */
+        this.raise = (e) => {
+            return this.applyEvent(pushEvent(e))
+        }
+        /**
+         * pushEvent allows you to push event(s) directly into
+         * the unit of work without mutating the provider.
+         * this lets you stream into storage without getting into recursive loops
+         * @param {Object|Array} e the event(s) to push
+         * @return {eventable}  the stampit eventable instance
+         * */
+        this.pushEvent = (e) => {
+            e = pushEvent(e)
+            this.revision(e[e.length - 1].revision)
+            return this
         }
         const applyEvent = (e, applied) => {
             if(applied.length === e.length) {
@@ -357,7 +380,7 @@ const eventable = stampit()
             applied.results.push(result)
             return applyEvent(e, applied)
         }
-        this.applyEvent = function(e) {
+        this.applyEvent = (e) => {
             if(!Array.isArray(e)) {
                 e = [e]
             }
