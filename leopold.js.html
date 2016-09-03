@@ -30,8 +30,8 @@
       <div class="row">
         <div class="span3 bs-docs-sidebar">
           <ul class="nav nav-list bs-docs-sidenav affix-top">
-            <li><a>Main</a></li>
-            <li class="active"><a>leopold.js</a></li>
+            <li><a href="index.html">Main</a></li>
+            <li class="active"><a href="leopold.js.html">leopold.js</a></li>
           </ul>
           <div class="scrollspy">
             <ul class="nav nav-list bs-docs-sidenav affix-top">
@@ -44,6 +44,26 @@
               <li><a href="#nextRevision"><i class="alert alert-success"></i><span>nextRevision</span></a>
               </li>
               <li><a href="#hashIdentityMap"><i class="alert alert-success"></i><span>hashIdentityMap</span></a>
+              </li>
+              <li><a href="#clear"><i class="alert alert-success"></i><span>clear</span></a>
+              </li>
+              <li><a href="#raise"><i class="alert alert-success"></i><span>raise</span></a>
+              </li>
+              <li><a href="#pushEvent"><i class="alert alert-success"></i><span>pushEvent</span></a>
+              </li>
+              <li><a href="#nullStorage"><i class="alert alert-success"></i><span>nullStorage</span></a>
+              </li>
+              <li><a href="#atomic"><i class="alert alert-success"></i><span>atomic</span></a>
+              </li>
+              <li><a href="#eventable"><i class="alert alert-success"></i><span>eventable</span></a>
+              </li>
+              <li><a href="#commit"><i class="alert alert-success"></i><span>commit</span></a>
+              </li>
+              <li><a href="#unitOfWork"><i class="alert alert-success"></i><span>unitOfWork</span></a>
+              </li>
+              <li><a href="#mount"><i class="alert alert-success"></i><span>mount</span></a>
+              </li>
+              <li><a href="#restore"><i class="alert alert-success"></i><span>restore</span></a>
               </li>
             </ul>
           </div>
@@ -178,382 +198,480 @@ const inMemoryStorage = stampit()
             }
             envelopes.push(env)
             return this
+        }</code></pre>
+          <section id="clear">
+            <h1>clear</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.clear</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>clear all envelops. DANGER ZONE!</p></div>
+          <pre><code class="language-javascript">this.clear = () =&gt; {
+    envelopes = []
+}
+this.events = function*(from, to) {
+    from = (from || 0)
+    to = (to || Number.MAX_VALUE)
+    if(from &gt; to) {
+        throw new Error('`from` must be less than or equal `to`')
+    }
+    if(!envelopes.length) {
+        return []
+    }
+    for(let env of envelopes) {
+        if(env.revision &gt; to) {
+            //we are done streaming
+            return
         }
-        /**
-         * clear all envelops. DANGER ZONE!
-         * */
-        this.clear = () =&gt; {
-            envelopes = []
-        }
-        this.events = function*(from, to) {
-            from = (from || 0)
-            to = (to || Number.MAX_VALUE)
-            if(from &gt; to) {
-                throw new Error('`from` must be less than or equal `to`')
-            }
-            if(!envelopes.length) {
-                return []
-            }
-            for(let env of envelopes) {
-                if(env.revision &gt; to) {
-                    //we are done streaming
-                    return
-                }
-                if(env.revision &gt;= from) {
-                    for(let ev of env.events) {
-                        yield ev
-                    }
-                }
+        if(env.revision &gt;= from) {
+            for(let ev of env.events) {
+                yield ev
             }
         }
+    }
+}
     })
 
 const writeableUnitOfWork = stampit()
     .refs({
-        storage: undefined
-        , identityMap: undefined
+storage: undefined
+, identityMap: undefined
     })
     .methods({
-        envelope: function enveloper( events) {
-            return {
-                events: events
-            }
-        }
+envelope: function enveloper( events) {
+    return {
+        events: events
+    }
+}
     })
     .init(function(){
-        let pending = []
+let pending = []
 
-        this.append = (e) =&gt; {
-            pending.push.apply(pending,e)
-            return e
-        }
-        this.commit = () =&gt; {
-            //move reference to array in case event arrives while flushing
-            let committable = pending.splice(0,pending.length)
-            let envelope = this.envelope(committable)
-            this.storage.store(envelope)
-            return this
-        }
-        this.register = function() {
-            //no op
-        }
+this.append = (e) =&gt; {
+    pending.push.apply(pending,e)
+    return e
+}
+this.commit = () =&gt; {
+    //move reference to array in case event arrives while flushing
+    let committable = pending.splice(0,pending.length)
+    let envelope = this.envelope(committable)
+    this.storage.store(envelope)
+    return this
+}
+this.register = function() {
+    //no op
+}
     })
 
 const readableUnitOfWork = stampit()
     .refs({
-        storage: undefined
-        , identityMap: undefined
+storage: undefined
+, identityMap: undefined
     })
     .init(function(){
-        this.append = (e) =&gt; {
-            //no op
-            return e
-        }
-        this.commit = () =&gt; {
-            return this
-        }
-        this.register = this.identityMap.register
+this.append = (e) =&gt; {
+    //no op
+    return e
+}
+this.commit = () =&gt; {
+    return this
+}
+this.register = this.identityMap.register
 
-        //helper function to allow function binding during iteration
-        function asyncApply(event, identityMap) {
-            let target = identityMap.get(event.id)
-            return target.applyEvent(event)
+//helper function to allow function binding during iteration
+function asyncApply(event, identityMap) {
+    let target = identityMap.get(event.id)
+    return target.applyEvent(event)
+}
+const iterate = (cur, iterator, accumulator) =&gt; {
+    if(cur.done) {
+        return accumulator
+    }
+    let event = cur.value
+    let result  = undefined
+    if(accumulator.promise) {
+        //chain promises
+        //effectively creating a complicated reduce statement
+        accumulator.promise = result = accumulator.promise
+            .then(asyncApply.bind(this, event, this.identityMap))
+    } else {
+        let target = this.identityMap.get(event.id)
+        let fn = target.applyEvent.bind(target, event)
+        try  {
+            result = fn()
+        } catch(err) {
+            iterator.throw(err)
+            throw err
         }
-        const iterate = (cur, iterator, accumulator) =&gt; {
-            if(cur.done) {
-                return accumulator
-            }
-            let event = cur.value
-            let result  = undefined
-            if(accumulator.promise) {
-                //chain promises
-                //effectively creating a complicated reduce statement
-                accumulator.promise = result = accumulator.promise
-                    .then(asyncApply.bind(this, event, this.identityMap))
-            } else {
-                let target = this.identityMap.get(event.id)
-                let fn = target.applyEvent.bind(target, event)
-                try  {
-                    result = fn()
-                } catch(err) {
-                    iterator.throw(err)
-                    throw err
-                }
-                //was a promise returned?
-                if(result &amp;&amp; result.then) {
-                    accumulator.promise = result
-                }
-            }
-            return iterate(iterator.next(), iterator, accumulator)
+        //was a promise returned?
+        if(result &amp;&amp; result.then) {
+            accumulator.promise = result
         }
-        this.restore = (root, from, to) =&gt; {
-            if(!root) {
-                throw new Error('`root` is required')
-            }
-            this.register(root.id(),root)
-            let events = this.storage.events(from, to)
-            let accumulator = {}
-            iterate(events.next(),events,accumulator)
-            if(accumulator.promise) {
-                return accumulator.promise
-            }
-            return this
-        }
+    }
+    return iterate(iterator.next(), iterator, accumulator)
+}
+this.restore = (root, from, to) =&gt; {
+    if(!root) {
+        throw new Error('`root` is required')
+    }
+    this.register(root.id(),root)
+    let events = this.storage.events(from, to)
+    let accumulator = {}
+    iterate(events.next(),events,accumulator)
+    if(accumulator.promise) {
+        return accumulator.promise
+    }
+    return this
+}
     })
 
 const unitOfWork = stampit()
     .refs({
-        storage: undefined
-        , identityMap: undefined
+storage: undefined
+, identityMap: undefined
     })
     .methods({
-        envelope: function enveloper( events) {
-            return {
-                events: events
-            }
-        }
+envelope: function enveloper( events) {
+    return {
+        events: events
+    }
+}
     })
     .init(function(){
-        let current
-        let writeable = writeableUnitOfWork({
-            envelope      : this.envelope
-            , identityMap : this.identityMap
-            , storage     : this.storage
-        })
-        let readable = readableUnitOfWork({
-            identityMap : this.identityMap
-            , storage   : this.storage
-        })
+let current
+let writeable = writeableUnitOfWork({
+    envelope      : this.envelope
+    , identityMap : this.identityMap
+    , storage     : this.storage
+})
+let readable = readableUnitOfWork({
+    identityMap : this.identityMap
+    , storage   : this.storage
+})
 
-        this.append = (e) =&gt; {
-            let result = current.append(e)
-            if(!this.atomic) {
-                //each event gets stored
-                this.commit()
-                return result
-            }
-            return result
-        }
-        this.commit = () =&gt; {
-            current.commit()
+this.append = (e) =&gt; {
+    let result = current.append(e)
+    if(!this.atomic) {
+        //each event gets stored
+        this.commit()
+        return result
+    }
+    return result
+}
+this.commit = () =&gt; {
+    current.commit()
+    this.identityMap.release()
+    return this
+}
+this.register = (id, provider) =&gt; {
+    return current.register(id, provider)
+}
+this.restore = (root, from, to) =&gt; {
+    current = readable
+    let result = current.restore(root, from, to)
+    if(result.then) {
+        return result
+        .bind(this)
+        .then(function(){
             this.identityMap.release()
+            current = writeable
             return this
-        }
-        this.register = (id, provider) =&gt; {
-            return current.register(id, provider)
-        }
-        this.restore = (root, from, to) =&gt; {
-            current = readable
-            let result = current.restore(root, from, to)
-            if(result.then) {
-                return result
-                .bind(this)
-                .then(function(){
-                    this.identityMap.release()
-                    current = writeable
-                    return this
-                })
-            } else {
-                this.identityMap.release()
-                current = writeable
-                return this
-            }
-        }
-
-        //by default we are in writeable state
+        })
+    } else {
+        this.identityMap.release()
         current = writeable
+        return this
+    }
+}
+
+//by default we are in writeable state
+current = writeable
     })
 
 const eventable = stampit()
     .init(function(){
-        let uow = this.leo.unitOfWork()
-        //decorate event(s) with critical properties
-        let decorate = (arr) =&gt; {
-            let rev = this.nextRevision()
-            return arr.map((e) =&gt; {
-                e.id = this.id()
-                e.revision = rev++
-                return e
-            })
-        }
+let uow = this.leo.unitOfWork()
+//decorate event(s) with critical properties
+let decorate = (arr) =&gt; {
+    let rev = this.nextRevision()
+    return arr.map((e) =&gt; {
+        e.id = this.id()
+        e.revision = rev++
+        return e
+    })
+}
 
-        let assertIdentity = () =&gt; {
-            if(!this.hasIdentity()) {
-                throw new Error('identity is unknown')
-            }
-        }
+let assertIdentity = () =&gt; {
+    if(!this.hasIdentity()) {
+        throw new Error('identity is unknown')
+    }
+}
 
-        let validateEvents = function (arr) {
-            for(let e of arr) {
-                if(!e || !e.event) {
-                    throw new Error('`event` is required')
-                }
-            }
-            return arr
+let validateEvents = function (arr) {
+    for(let e of arr) {
+        if(!e || !e.event) {
+            throw new Error('`event` is required')
         }
+    }
+    return arr
+}
 
-        let pushEvent = (e) =&gt; {
-            assertIdentity()
-            if(!Array.isArray(e)) {
-                e = [e]
-            }
-            validateEvents(e)
-            decorate(e)
-            uow.append(e)
-            return e
-        }
-        /**
-         * raise is the main interface you will use to mutate the eventable
-         * instance and push the events onto the unit of work into storage.
-         * The eventable instance revision is incremented.
-         * @param {Object|Array} e the event(s) to push
-         * @return {eventable}  the result of `${event}` calls
-         * */
-        this.raise = (e) =&gt; {
-            return this.applyEvent(pushEvent(e))
-        }
-        /**
-         * pushEvent allows you to push event(s) directly into
-         * the unit of work without mutating the provider.
-         * this lets you stream into storage without getting into recursive loops
-         * @param {Object|Array} e the event(s) to push
-         * @return {eventable}  the stampit eventable instance
-         * */
-        this.pushEvent = (e) =&gt; {
-            e = pushEvent(e)
-            this.revision(e[e.length - 1].revision)
-            return this
-        }
-        const applyEvent = (e, applied) =&gt; {
-            if(applied.length === e.length) {
-                return applied
-            }
-            let current = e[applied.length]
-            this.revision(current.revision)
-            applied.length = applied.length + 1
+let pushEvent = (e) =&gt; {
+    assertIdentity()
+    if(!Array.isArray(e)) {
+        e = [e]
+    }
+    validateEvents(e)
+    decorate(e)
+    uow.append(e)
+    return e
+}</code></pre>
+          <section id="raise">
+            <h1>raise</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.raise</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr>
+                <th style="width:20%">Option name</th>
+                <th style="width:20%">Type</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>e</td>
+                <td>Object, Array</td>
+                <td><p>the event(s) to push</p></td>
+              </tr>
+              <tr>
+                <td>return</td>
+                <td>eventable</td>
+                <td><p>the result of <code>${event}</code> calls</p></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="description"><p>raise is the main interface you will use to mutate the eventable<br />instance and push the events onto the unit of work into storage.<br />The eventable instance revision is incremented.</p></div>
+          <pre><code class="language-javascript">this.raise = (e) =&gt; {
+    return this.applyEvent(pushEvent(e))
+}</code></pre>
+          <section id="pushEvent">
+            <h1>pushEvent</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.pushEvent</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr>
+                <th style="width:20%">Option name</th>
+                <th style="width:20%">Type</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>e</td>
+                <td>Object, Array</td>
+                <td><p>the event(s) to push</p></td>
+              </tr>
+              <tr>
+                <td>return</td>
+                <td>eventable</td>
+                <td><p>the stampit eventable instance</p></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="description"><p>pushEvent allows you to push event(s) directly into<br />the unit of work without mutating the provider.<br />this lets you stream into storage without getting into recursive loops</p></div>
+          <pre><code class="language-javascript">this.pushEvent = (e) =&gt; {
+    e = pushEvent(e)
+    this.revision(e[e.length - 1].revision)
+    return this
+}
+const applyEvent = (e, applied) =&gt; {
+    if(applied.length === e.length) {
+        return applied
+    }
+    let current = e[applied.length]
+    this.revision(current.revision)
+    applied.length = applied.length + 1
 
-            let fn = this['$' + current.event]
-            let result = undefined
+    let fn = this['$' + current.event]
+    let result = undefined
 
-            if(applied.promise) {
-                if(!fn) {
-                    return applyEvent(e, applied)
-                }
-                applied.promise = result = applied.promise
-                    .return(current)
-                    .bind(this)
-                    .then(fn)
-            } else {
-                if(!fn) {
-                    return applyEvent(e, applied)
-                }
-                result = fn.call(this, current)
-                //received a promise
-                if(result &amp;&amp; result.then) {
-                    applied.promise = result
-                }
-            }
-            applied.results.push(result)
+    if(applied.promise) {
+        if(!fn) {
             return applyEvent(e, applied)
         }
-        this.applyEvent = (e) =&gt; {
-            if(!Array.isArray(e)) {
-                e = [e]
-            }
-            let applied = {
-                results: []
-                , async: false
-                , length: 0
-            }
-            applyEvent(e,applied)
-            if(applied.promise) {
-                return Promise.all(applied.results)
-            }
-            return this
+        applied.promise = result = applied.promise
+            .return(current)
+            .bind(this)
+            .then(fn)
+    } else {
+        if(!fn) {
+            return applyEvent(e, applied)
         }
-        //register this instance on the unit of work
-        uow.register(this.id(), this)
+        result = fn.call(this, current)
+        //received a promise
+        if(result &amp;&amp; result.then) {
+            applied.promise = result
+        }
+    }
+    applied.results.push(result)
+    return applyEvent(e, applied)
+}
+this.applyEvent = (e) =&gt; {
+    if(!Array.isArray(e)) {
+        e = [e]
+    }
+    let applied = {
+        results: []
+        , async: false
+        , length: 0
+    }
+    applyEvent(e,applied)
+    if(applied.promise) {
+        return Promise.all(applied.results)
+    }
+    return this
+}
+//register this instance on the unit of work
+uow.register(this.id(), this)
     })
 
 export default stampit()
-    .static({
-        /**
-         * null object pattern for storage
-         * when memory footprint is a concern or YAGNI storage
-         * but want the benefits of event provider.
-         * Handy for testing
-         * */
-        nullStorage: nullStorage
+    .static({</code></pre>
+          <section id="nullStorage">
+            <h1>nullStorage</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>nullStorage</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>null object pattern for storage<br />when memory footprint is a concern or YAGNI storage<br />but want the benefits of event provider.<br />Handy for testing</p></div>
+          <pre><code class="language-javascript">nullStorage: nullStorage
     })
     .compose(identifiable)
-    .refs({
-        /**
-         * `false` immediately stores events; otherwise, they are
-         * queued to be committed to storage later.
-         * */
-        atomic: true
+    .refs({</code></pre>
+          <section id="atomic">
+            <h1>atomic</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>atomic</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p><code>false</code> immediately stores events; otherwise, they are<br />queued to be committed to storage later.</p></div>
+          <pre><code class="language-javascript">atomic: true
     })
     .init(function() {
-        this.storage = (this.storage || inMemoryStorage())
-        this.identityMap = (this.identityMap || hashIdentityMap())
-        //default uow impl
-        let uow = unitOfWork({
-            storage: this.storage
-            , identityMap: this.identityMap
-            , atomic: this.atomic
-        })
-        /**
-         * Expose an `stamp` that may be use for composition
-         * with another stamp
-         * @method eventable
-         * @return {stamp} factory that may be composed to attach
-         * `eventable` behaviors onto another stamp
-         * */
-        this.eventable = () =&gt; {
-            return stampit()
-                .props({leo: this})
-                .compose(identifiable)
-                .compose(revisable)
-                .compose(eventable)
-        }
+this.storage = (this.storage || inMemoryStorage())
+this.identityMap = (this.identityMap || hashIdentityMap())
+//default uow impl
+let uow = unitOfWork({
+    storage: this.storage
+    , identityMap: this.identityMap
+    , atomic: this.atomic
+})</code></pre>
+          <section id="eventable">
+            <h1>eventable</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.eventable</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>Expose an <code>stamp</code> that may be use for composition<br />with another stamp</p></div>
+          <pre><code class="language-javascript">this.eventable = () =&gt; {
+    return stampit()
+        .props({leo: this})
+        .compose(identifiable)
+        .compose(revisable)
+        .compose(eventable)
+}</code></pre>
+          <section id="commit">
+            <h1>commit</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.commit</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>convenience method to commit pending events to storage</p></div>
+          <pre><code class="language-javascript">this.commit = () =&gt; {
+    return this.unitOfWork().commit()
+}</code></pre>
+          <section id="unitOfWork">
+            <h1>unitOfWork</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.unitOfWork</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>convenience method to unitOfWork inside <code>eventable</code> impl</p></div>
+          <pre><code class="language-javascript">this.unitOfWork = () =&gt; {
+    return uow
+}</code></pre>
+          <section id="mount">
+            <h1>mount</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.mount</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <div class="description"><p>mount an envelope having events into storage<br />useful for testing, or perhaps seeding an app from a backend</p></div>
+          <pre><code class="language-javascript">this.mount = (envelope) =&gt; {
+    this.storage.store(envelope)
+    return this
+}</code></pre>
+          <section id="restore">
+            <h1>restore</h1>
+            <h5 class="subheader"></h5>
+            <p>
+              <div class="label label-success radius ctx-type">property</div><span>&nbsp;</span><span>this.restore</span><span>&nbsp;</span>
+            </p>
+          </section>
+          <table class="table table-bordered table-striped">
+            <thead>
+              <tr>
+                <th style="width:20%">Option name</th>
+                <th style="width:20%">Type</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>root</td>
+                <td>eventable</td>
+                <td><p>any <code>eventable</code> object</p></td>
+              </tr>
+              <tr>
+                <td>from</td>
+                <td>Number</td>
+                <td><p>lower bound revision to include</p></td>
+              </tr>
+              <tr>
+                <td>to</td>
+                <td>Number</td>
+                <td><p>upper bound revision to include</p></td>
+              </tr>
+              <tr>
+                <td>return</td>
+                <td>Promise</td>
+                <td><p>resolving this leo instance</p></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="description"><p>restore to revision <code>to</code> from revision <code>from</code><br />using <code>root</code> at the entrypoint. <code>to</code> and <code>from</code> are inclusive.</p></div>
+          <pre><code class="language-javascript">this.restore = (root, from, to) =&gt; {
+    return this.unitOfWork().restore(root, from, to)
+}
 
-        /**
-         * convenience method to commit pending events to storage
-         * @return {leopold}
-         * */
-        this.commit = () =&gt; {
-            return this.unitOfWork().commit()
-        }
-        /**
-         * convenience method to unitOfWork inside `eventable` impl
-         * @return {unitOfWork}
-         * */
-        this.unitOfWork = () =&gt; {
-            return uow
-        }
-        /**
-         * mount an envelope having events into storage
-         * useful for testing, or perhaps seeding an app from a backend
-         * */
-        this.mount = (envelope) =&gt; {
-            this.storage.store(envelope)
-            return this
-        }
-        /**
-         * restore to revision `to` from revision `from`
-         * using `root` at the entrypoint. `to` and `from` are inclusive.
-         * @param {eventable} root any `eventable` object
-         * @param {Number} from lower bound revision to include
-         * @param {Number} to upper bound revision to include
-         * @return {Promise} resolving this leo instance
-         */
-        this.restore = (root, from, to) =&gt; {
-            return this.unitOfWork().restore(root, from, to)
-        }
-
-        this.revision = () =&gt; {
-            return this.storage.revision()
-        }
+this.revision = () =&gt; {
+    return this.storage.revision()
+}
     })</code></pre>
         </div>
       </div>
